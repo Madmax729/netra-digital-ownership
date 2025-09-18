@@ -4,16 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import BlockchainBackground from '@/components/BlockchainBackground';
-import { Upload, Shield, Image, Video, Download, Eye, EyeOff } from 'lucide-react';
+import SpaceGeometryBackground from '@/components/SpaceGeometryBackground';
+import { Upload, Shield, Image, Video, Download, Key, Lock } from 'lucide-react';
+import { WatermarkProcessor, type WatermarkKey } from '@/utils/watermarkAlgorithms';
+import { toast } from 'sonner';
 
 const Watermark = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [watermarkText, setWatermarkText] = useState('');
-  const [showWatermark, setShowWatermark] = useState(false);
+  const [watermarkKey, setWatermarkKey] = useState('');
+  const [watermarkedImageData, setWatermarkedImageData] = useState<ImageData | null>(null);
+  const [watermarkedUrl, setWatermarkedUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -35,19 +39,80 @@ const Watermark = () => {
   };
 
   const processWatermark = async (type: 'image' | 'video') => {
-    if (!selectedFile || !watermarkText) return;
+    if (!selectedFile || !watermarkKey) {
+      toast.error('Please select a file and enter a watermark key');
+      return;
+    }
+    
+    if (type === 'video') {
+      toast.info('Video watermarking is coming soon!');
+      return;
+    }
     
     setIsProcessing(true);
-    // Simulate processing
-    setTimeout(() => {
+    
+    try {
+      // Load image to canvas
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        // Get image data
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Generate watermark key
+        const key: WatermarkKey = WatermarkProcessor.generateKey(watermarkKey);
+        
+        // Embed watermark using DCT+QIM+DWT+SVD
+        const watermarkedData = await WatermarkProcessor.embedWatermark(imageData, key);
+        
+        // Draw watermarked image
+        ctx.putImageData(watermarkedData, 0, 0);
+        
+        // Convert to blob for download
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            setWatermarkedUrl(url);
+            setWatermarkedImageData(watermarkedData);
+            toast.success('Watermark embedded successfully using DCT+QIM+DWT+SVD algorithms!');
+          }
+          setIsProcessing(false);
+        }, 'image/png');
+      };
+      
+      img.src = previewUrl;
+    } catch (error) {
+      console.error('Watermarking failed:', error);
+      toast.error('Watermarking failed. Please try again.');
       setIsProcessing(false);
-      alert(`${type} watermarked successfully!`);
-    }, 3000);
+    }
+  };
+
+  const downloadWatermarkedImage = () => {
+    if (!watermarkedUrl) return;
+    
+    const link = document.createElement('a');
+    link.href = watermarkedUrl;
+    link.download = `watermarked_${selectedFile?.name || 'image.png'}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success('Watermarked image downloaded!');
   };
 
   return (
     <div className="min-h-screen blockchain-bg relative">
-      <BlockchainBackground />
+      <SpaceGeometryBackground />
       
       <div className="relative pt-24 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
@@ -57,7 +122,7 @@ const Watermark = () => {
               Blind Watermarking
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Embed invisible watermarks into your images and videos for copyright protection
+              Embed invisible watermarks using DCT+QIM+DWT+SVD algorithms with key-based binary watermarks
             </p>
           </div>
 
@@ -85,7 +150,7 @@ const Watermark = () => {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div
-                      className="border-2 border-dashed border-glass-border rounded-xl p-8 text-center transition-colors hover:border-blockchain-primary/50 cursor-pointer"
+                      className="border-2 border-dashed border-glass-border rounded-xl p-8 text-center transition-colors hover:border-primary/50 cursor-pointer"
                       onDrop={handleDrop}
                       onDragOver={(e) => e.preventDefault()}
                       onClick={() => fileInputRef.current?.click()}
@@ -103,8 +168,8 @@ const Watermark = () => {
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          <div className="mx-auto w-12 h-12 rounded-full bg-blockchain-primary/10 flex items-center justify-center">
-                            <Upload className="w-6 h-6 text-blockchain-primary" />
+                          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Upload className="w-6 h-6 text-primary" />
                           </div>
                           <div>
                             <p className="text-foreground font-medium">
@@ -137,40 +202,53 @@ const Watermark = () => {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-2">
-                      <Label htmlFor="watermark-text">Watermark Text</Label>
+                      <Label htmlFor="watermark-key" className="flex items-center space-x-2">
+                        <Key className="w-4 h-4" />
+                        <span>Watermark Key</span>
+                      </Label>
                       <Input
-                        id="watermark-text"
-                        placeholder="Enter your watermark text"
-                        value={watermarkText}
-                        onChange={(e) => setWatermarkText(e.target.value)}
+                        id="watermark-key"
+                        type="password"
+                        placeholder="Enter your secret key"
+                        value={watermarkKey}
+                        onChange={(e) => setWatermarkKey(e.target.value)}
                         className="glass"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        This key will generate a unique binary watermark pattern
+                      </p>
                     </div>
 
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label>Preview Watermark</Label>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="btn-glass"
-                          onClick={() => setShowWatermark(!showWatermark)}
-                        >
-                          {showWatermark ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </Button>
+                      <div className="flex items-center space-x-2 p-3 bg-muted/10 rounded-lg">
+                        <Lock className="w-4 h-4 text-primary" />
+                        <div className="text-sm">
+                          <p className="font-medium">Algorithm: DCT+QIM+DWT+SVD</p>
+                          <p className="text-muted-foreground text-xs">
+                            Military-grade invisible watermarking
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        The actual watermark will be invisible and embedded at the pixel level
-                      </p>
                     </div>
 
                     <Button
                       onClick={() => processWatermark('image')}
-                      disabled={!selectedFile || !watermarkText || isProcessing}
+                      disabled={!selectedFile || !watermarkKey || isProcessing}
                       className="w-full btn-primary"
                     >
-                      {isProcessing ? 'Processing...' : 'Add Watermark'}
+                      {isProcessing ? 'Processing...' : 'Embed Watermark'}
                     </Button>
+
+                    {watermarkedUrl && (
+                      <Button
+                        onClick={downloadWatermarkedImage}
+                        variant="outline"
+                        className="w-full btn-glass flex items-center space-x-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download Watermarked Image</span>
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -188,7 +266,7 @@ const Watermark = () => {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div
-                      className="border-2 border-dashed border-glass-border rounded-xl p-8 text-center transition-colors hover:border-blockchain-primary/50 cursor-pointer"
+                      className="border-2 border-dashed border-glass-border rounded-xl p-8 text-center transition-colors hover:border-primary/50 cursor-pointer"
                       onDrop={handleDrop}
                       onDragOver={(e) => e.preventDefault()}
                       onClick={() => fileInputRef.current?.click()}
@@ -206,8 +284,8 @@ const Watermark = () => {
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          <div className="mx-auto w-12 h-12 rounded-full bg-blockchain-primary/10 flex items-center justify-center">
-                            <Video className="w-6 h-6 text-blockchain-primary" />
+                          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Video className="w-6 h-6 text-primary" />
                           </div>
                           <div>
                             <p className="text-foreground font-medium">
@@ -239,12 +317,16 @@ const Watermark = () => {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-2">
-                      <Label htmlFor="video-watermark-text">Watermark Text</Label>
+                      <Label htmlFor="video-watermark-key" className="flex items-center space-x-2">
+                        <Key className="w-4 h-4" />
+                        <span>Watermark Key</span>
+                      </Label>
                       <Input
-                        id="video-watermark-text"
-                        placeholder="Enter your watermark text"
-                        value={watermarkText}
-                        onChange={(e) => setWatermarkText(e.target.value)}
+                        id="video-watermark-key"
+                        type="password"
+                        placeholder="Enter your secret key"
+                        value={watermarkKey}
+                        onChange={(e) => setWatermarkKey(e.target.value)}
                         className="glass"
                       />
                     </div>
@@ -270,7 +352,7 @@ const Watermark = () => {
 
                     <Button
                       onClick={() => processWatermark('video')}
-                      disabled={!selectedFile || !watermarkText || isProcessing}
+                      disabled={!selectedFile || !watermarkKey || isProcessing}
                       className="w-full btn-primary"
                     >
                       {isProcessing ? 'Processing Video...' : 'Add Video Watermark'}
@@ -286,15 +368,18 @@ const Watermark = () => {
             <Card className="glass-card mt-8">
               <CardContent className="p-6">
                 <div className="text-center space-y-4">
-                  <div className="w-8 h-8 border-4 border-blockchain-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-                  <p className="text-foreground font-medium">Processing watermark...</p>
+                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <p className="text-foreground font-medium">Processing watermark using DCT+QIM+DWT+SVD...</p>
                   <p className="text-sm text-muted-foreground">
-                    This may take a few minutes depending on file size
+                    Embedding binary watermark derived from your key
                   </p>
                 </div>
               </CardContent>
             </Card>
           )}
+
+          {/* Hidden canvas for image processing */}
+          <canvas ref={canvasRef} className="hidden" />
         </div>
       </div>
     </div>
