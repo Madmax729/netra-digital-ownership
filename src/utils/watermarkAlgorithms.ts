@@ -109,12 +109,15 @@ export class WatermarkProcessor {
         if (watermarkIndex < watermarkLength) {
           const quantizer = alpha;
           const coefficient = dctCoeffs[i][j];
-          
-          // QIM extraction
-          const remainder = coefficient % quantizer;
-          const bit = remainder > quantizer / 2 ? 1 : 0;
+
+          // QIM extraction (robust against negative remainders)
+          const mod = ((coefficient % quantizer) + quantizer) % quantizer;
+          // We embedded around q/4 (bit=1) and 3q/4 (bit=0). Pick the closest.
+          const distToOne = Math.abs(mod - quantizer / 4);
+          const distToZero = Math.abs(mod - (3 * quantizer) / 4);
+          const bit = distToOne <= distToZero ? 1 : 0;
           extractedWatermark.push(bit);
-          
+
           watermarkIndex++;
         }
       }
@@ -163,18 +166,25 @@ export class WatermarkProcessor {
 
     for (let y = 0; y < Math.min(watermarkedMatrix.length, imageData.height / 8); y++) {
       for (let x = 0; x < Math.min(watermarkedMatrix[0].length, imageData.width / 8); x++) {
-        const actualY = y * 8;
-        const actualX = x * 8;
-        if (actualY < imageData.height && actualX < imageData.width) {
-          const idx = (actualY * imageData.width + actualX) * 4;
+        const blockY = y * 8;
+        const blockX = x * 8;
+        if (blockY < imageData.height && blockX < imageData.width) {
+          const baseIdx = (blockY * imageData.width + blockX) * 4;
           const watermarkedValue = Math.max(0, Math.min(255, watermarkedMatrix[y][x]));
-          const original = (imageData.data[idx] + imageData.data[idx + 1] + imageData.data[idx + 2]) / 3;
+          const original = (imageData.data[baseIdx] + imageData.data[baseIdx + 1] + imageData.data[baseIdx + 2]) / 3;
           const diff = watermarkedValue - original;
-          
-          newImageData.data[idx] = Math.max(0, Math.min(255, imageData.data[idx] + diff * key.strength));
-          newImageData.data[idx + 1] = Math.max(0, Math.min(255, imageData.data[idx + 1] + diff * key.strength));
-          newImageData.data[idx + 2] = Math.max(0, Math.min(255, imageData.data[idx + 2] + diff * key.strength));
-          newImageData.data[idx + 3] = imageData.data[idx + 3];
+
+          // Spread the modification across the entire 8x8 block for stronger embedding
+          for (let by = 0; by < 8 && (blockY + by) < imageData.height; by++) {
+            for (let bx = 0; bx < 8 && (blockX + bx) < imageData.width; bx++) {
+              const idx = ((blockY + by) * imageData.width + (blockX + bx)) * 4;
+              const delta = diff * key.strength;
+              newImageData.data[idx] = Math.max(0, Math.min(255, imageData.data[idx] + delta));
+              newImageData.data[idx + 1] = Math.max(0, Math.min(255, imageData.data[idx + 1] + delta));
+              newImageData.data[idx + 2] = Math.max(0, Math.min(255, imageData.data[idx + 2] + delta));
+              newImageData.data[idx + 3] = imageData.data[idx + 3];
+            }
+          }
         }
       }
     }
@@ -232,7 +242,7 @@ export class WatermarkProcessor {
 
     return {
       seed: Math.abs(hash) % 100000,
-      strength: 0.1,
+      strength: 0.35,
       alpha: 8.0
     };
   }

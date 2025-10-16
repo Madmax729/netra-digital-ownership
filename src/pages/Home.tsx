@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import BlockchainBackground from '@/components/BlockchainBackground';
+import SpaceGeometryBackground from '@/components/SpaceGeometryBackground';
 import { Shield, CheckCircle, Upload, CheckCircle as Verify, Search, Wand2, ArrowRight, CheckCircle as Check } from 'lucide-react';
 
 const Home = () => {
@@ -48,8 +48,8 @@ const Home = () => {
   ];
 
   return (
-    <div className="min-h-screen blockchain-bg relative">
-      <BlockchainBackground />
+    <div className="min-h-screen relative theme-hero-dark">
+      <SpaceGeometryBackground />
       
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8">

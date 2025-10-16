@@ -6,6 +6,26 @@ import { Shield, Menu, X, Home, Upload, CheckCircle, Search, Wand2, LayoutDashbo
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const [address, setAddress] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      alert('Please install MetaMask to connect your wallet');
+      return;
+    }
+    try {
+      setIsConnecting(true);
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (accounts && accounts.length > 0) {
+        setAddress(accounts[0]);
+      }
+    } catch (err) {
+      console.error('MetaMask connection failed:', err);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   const navItems = [
     { name: 'Home', href: '/', icon: Home },
@@ -49,10 +69,10 @@ const Navigation = () => {
             ))}
           </div>
 
-          {/* Connect Wallet Button */}
+{/* Connect Wallet Button */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button className="btn-glass">
-              Connect Wallet
+            <Button className="btn-glass" onClick={connectWallet} disabled={isConnecting}>
+              {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : (isConnecting ? 'Connecting...' : 'Connect Wallet')}
             </Button>
           </div>
 
@@ -86,8 +106,8 @@ const Navigation = () => {
               </Link>
             ))}
             <div className="pt-2 border-t border-glass-border">
-              <Button className="btn-glass w-full">
-                Connect Wallet
+              <Button className="btn-glass w-full" onClick={connectWallet} disabled={isConnecting}>
+                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : (isConnecting ? 'Connecting...' : 'Connect Wallet')}
               </Button>
             </div>
           </div>

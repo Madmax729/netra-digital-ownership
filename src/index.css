@@ -202,4 +202,15 @@
   .btn-glass {
     @apply glass text-foreground hover:bg-black/5 transition-all duration-300;
   }
+
+  /* Hero dark theme utilities */
+  .theme-hero-dark {
+    /* Override semantic tokens locally for the hero */
+    --background: 248 42% 3%; /* near #050510 */
+    --foreground: 0 0% 100%;
+    --muted-foreground: 0 0% 70%;
+    --accent: 268 100% 60%; /* vivid magenta/purple */
+    position: relative;
+    background: hsl(var(--background));
+  }
 }
