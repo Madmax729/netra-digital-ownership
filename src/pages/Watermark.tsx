@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SpaceGeometryBackground from '@/components/SpaceGeometryBackground';
-import { Upload, Shield, Image, Video, Download, Key, Lock } from 'lucide-react';
+import { Upload, Shield, Image as ImageIcon, Video, Download, Key, Lock } from 'lucide-react';
 import { WatermarkProcessor, type WatermarkKey } from '@/utils/watermarkAlgorithms';
 import { toast } from 'sonner';
 
@@ -129,7 +129,7 @@ const Watermark = () => {
           <Tabs defaultValue="image" className="space-y-8">
             <TabsList className="grid w-full grid-cols-2 glass">
               <TabsTrigger value="image" className="flex items-center space-x-2">
-                <Image className="w-4 h-4" />
+                <ImageIcon className="w-4 h-4" />
                 <span>Image Watermarking</span>
               </TabsTrigger>
               <TabsTrigger value="video" className="flex items-center space-x-2">
