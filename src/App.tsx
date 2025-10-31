@@ -12,6 +12,7 @@ import IPFS from "./pages/IPFS";
 import Generate from "./pages/Generate";
 import Plagiarism from "./pages/Plagiarism";
 import NotFound from "./pages/NotFound";
+import { WalletProvider } from "@/hooks/use-wallet";
 
 const queryClient = new QueryClient();
 
@@ -38,10 +39,12 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Navigation />
-        <AnimatedRoutes />
-      </BrowserRouter>
+      <WalletProvider>
+        <BrowserRouter>
+          <Navigation />
+          <AnimatedRoutes />
+        </BrowserRouter>
+      </WalletProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

@@ -3,8 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import SpaceGeometryBackground from '@/components/SpaceGeometryBackground';
 import { Shield, CheckCircle, Upload, CheckCircle as Verify, Search, Wand2, ArrowRight, CheckCircle as Check } from 'lucide-react';
+import { useWallet } from '@/hooks/use-wallet';
 
 const Home = () => {
+  const { connect, isConnecting, switchAccount, address } = useWallet();
   const features = [
     {
       icon: Shield,
