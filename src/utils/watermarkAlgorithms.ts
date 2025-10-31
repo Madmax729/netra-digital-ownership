@@ -226,7 +226,7 @@ export class WatermarkProcessor {
     }
 
     const confidence = matches / compareLength;
-    const isWatermarked = confidence > 0.7; // Threshold for watermark detection
+    const isWatermarked = confidence > 0.6; // Slightly lower threshold for better recall
 
     return { isWatermarked, confidence };
   }
@@ -242,8 +242,8 @@ export class WatermarkProcessor {
 
     return {
       seed: Math.abs(hash) % 100000,
-      strength: 0.35,
-      alpha: 8.0
+      strength: 0.6,
+      alpha: 16.0
     };
   }
 }

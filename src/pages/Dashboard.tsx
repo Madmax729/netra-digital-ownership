@@ -1,8 +1,8 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import BlockchainBackground from '@/components/BlockchainBackground';
+import SpaceGeometryBackground from '@/components/SpaceGeometryBackground';
+import { useWallet } from '@/hooks/use-wallet';
 import { 
   Wallet, 
   Shield, 
@@ -19,24 +19,7 @@ import {
 } from 'lucide-react';
 
 const Dashboard = () => {
-  const [isConnected, setIsConnected] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('');
-
-  const connectWallet = async () => {
-    if (typeof window.ethereum !== 'undefined') {
-      try {
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts',
-        });
-        setWalletAddress(accounts[0]);
-        setIsConnected(true);
-      } catch (error) {
-        console.error('Error connecting to MetaMask:', error);
-      }
-    } else {
-      alert('Please install MetaMask to connect your wallet');
-    }
-  };
+  const { isConnected, address, connect, isConnecting, switchAccount } = useWallet();
 
   const stats = [
     {
@@ -165,7 +148,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen blockchain-bg relative">
-      <BlockchainBackground />
+      <SpaceGeometryBackground />
       
       <div className="relative pt-24 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -193,21 +176,26 @@ const Dashboard = () => {
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {isConnected 
-                        ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+                        ? `${address?.slice(0, 6)}...${address?.slice(-4)}`
                         : 'Connect MetaMask to access all features'
                       }
                     </p>
                   </div>
                 </div>
                 {!isConnected && (
-                  <Button onClick={connectWallet} className="btn-primary">
-                    Connect MetaMask
+                  <Button onClick={connect} className="btn-primary" disabled={isConnecting}>
+                    {isConnecting ? 'Connecting...' : 'Connect MetaMask'}
                   </Button>
                 )}
                 {isConnected && (
-                  <Badge className="bg-green-100 text-green-800 border-green-200">
-                    Connected
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-green-100 text-green-800 border-green-200">
+                      Connected
+                    </Badge>
+                    <Button variant="outline" className="btn-glass" onClick={switchAccount}>
+                      Switch Account
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardContent>

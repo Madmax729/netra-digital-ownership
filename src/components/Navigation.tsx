@@ -2,30 +2,12 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Shield, Menu, X, Home, Upload, CheckCircle, Search, Wand2, LayoutDashboard } from 'lucide-react';
+import { useWallet } from '@/hooks/use-wallet';
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const [address, setAddress] = useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
-
-  const connectWallet = async () => {
-    if (!window.ethereum) {
-      alert('Please install MetaMask to connect your wallet');
-      return;
-    }
-    try {
-      setIsConnecting(true);
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (accounts && accounts.length > 0) {
-        setAddress(accounts[0]);
-      }
-    } catch (err) {
-      console.error('MetaMask connection failed:', err);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
+  const { address, isConnecting, connect } = useWallet();
 
   const navItems = [
     { name: 'Home', href: '/', icon: Home },
@@ -71,7 +53,7 @@ const Navigation = () => {
 
 {/* Connect Wallet Button */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button className="btn-glass" onClick={connectWallet} disabled={isConnecting}>
+            <Button className="btn-glass" onClick={connect} disabled={isConnecting}>
               {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : (isConnecting ? 'Connecting...' : 'Connect Wallet')}
             </Button>
           </div>
@@ -106,7 +88,7 @@ const Navigation = () => {
               </Link>
             ))}
             <div className="pt-2 border-t border-glass-border">
-              <Button className="btn-glass w-full" onClick={connectWallet} disabled={isConnecting}>
+              <Button className="btn-glass w-full" onClick={connect} disabled={isConnecting}>
                 {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : (isConnecting ? 'Connecting...' : 'Connect Wallet')}
               </Button>
             </div>

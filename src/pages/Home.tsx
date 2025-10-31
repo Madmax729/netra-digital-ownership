@@ -55,7 +55,7 @@ const Home = () => {
       <section className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
           <div className="space-y-8">
-            <h1 className="text-5xl sm:text-7xl font-bold tracking-tight">
+            <h1 className="text-5xl sm:text-7xl font-bold tracking-tight py-2 md:py-4">
               <span className="block text-foreground">Protect Your</span>
               <span className="block text-gradient">Digital Content</span>
             </h1>
