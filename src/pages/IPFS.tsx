@@ -25,22 +25,81 @@ const IPFS = () => {
     }
   };
 
-  const uploadToIPFS = async () => {
-    if (!selectedFile) return;
+  // const uploadToIPFS = async () => {
+  //   if (!selectedFile) return;
     
-    setIsUploading(true);
-    // Simulate IPFS upload
-    setTimeout(() => {
-      setUploadResult({
-        ipfsHash: 'QmX7YzKvZjW9Hf2k8P3LmN4oQ5rS6tU7vW8xY9zA1bC2d',
-        gatewayUrl: 'https://ipfs.io/ipfs/QmX7YzKvZjW9Hf2k8P3LmN4oQ5rS6tU7vW8xY9zA1bC2d',
-        transactionHash: '0x1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z',
+  //   setIsUploading(true);
+  //   // Simulate IPFS upload
+  //   setTimeout(() => {
+  //     setUploadResult({
+  //       ipfsHash: 'QmX7YzKvZjW9Hf2k8P3LmN4oQ5rS6tU7vW8xY9zA1bC2d',
+  //       gatewayUrl: 'https://ipfs.io/ipfs/QmX7YzKvZjW9Hf2k8P3LmN4oQ5rS6tU7vW8xY9zA1bC2d',
+  //       transactionHash: '0x1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z',
+  //       fileSize: selectedFile.size,
+  //       timestamp: new Date().toISOString(),
+  //     });
+  //     setIsUploading(false);
+  //   }, 3000);
+  // };
+  const uploadToIPFS = async () => {
+  if (!selectedFile) return;
+
+  setIsUploading(true);
+
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    // Add metadata (optional but good for tracking)
+    const metadata = JSON.stringify({
+      name: selectedFile.name,
+      keyvalues: {
+        description,
+        uploadTime: new Date().toISOString(),
         fileSize: selectedFile.size,
-        timestamp: new Date().toISOString(),
-      });
-      setIsUploading(false);
-    }, 3000);
-  };
+      },
+    });
+    formData.append('pinataMetadata', metadata);
+
+    // Add options (optional)
+    const options = JSON.stringify({
+      cidVersion: 1,
+    });
+    formData.append('pinataOptions', options);
+
+    // 🔐 Replace with your JWT token (do NOT expose API Key/Secret in frontend)
+    const res = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+      method: 'POST',
+      headers: {
+        // Authorization: `Bearer YOUR_PINATA_JWT_HERE`,
+        Authorization: `Bearer ${import.meta.env.VITE_PINATA_JWT}`,
+
+      },
+      body: formData,
+    });
+
+    if (!res.ok) throw new Error('Upload failed');
+
+    const data = await res.json();
+
+    // You can generate a mock transaction hash (if you’re logging to blockchain later)
+    const fakeTransactionHash = '0x' + crypto.randomUUID().replace(/-/g, '').slice(0, 64);
+
+    setUploadResult({
+      ipfsHash: data.IpfsHash,
+      gatewayUrl: `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`,
+      transactionHash: fakeTransactionHash,
+      fileSize: selectedFile.size,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('IPFS upload error:', error);
+    alert('Upload failed. Please check console.');
+  } finally {
+    setIsUploading(false);
+  }
+};
+
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
