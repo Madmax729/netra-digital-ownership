@@ -8,6 +8,7 @@ import SpaceGeometryBackground from '@/components/SpaceGeometryBackground';
 import { Upload, Shield, Image as ImageIcon, Video, Download, Key, Lock, Music } from 'lucide-react';
 import { WatermarkProcessor, type WatermarkKey } from '@/utils/watermarkAlgorithms';
 import { AudioWatermarkProcessor, type AudioWatermarkKey } from '@/utils/audioWatermarkAlgorithms';
+import { VideoWatermarkProcessor } from '@/utils/videoWatermarkAlgorithms';
 import { toast } from 'sonner';
 
 const Watermark = () => {
@@ -18,6 +19,7 @@ const Watermark = () => {
   const [watermarkedImageData, setWatermarkedImageData] = useState<ImageData | null>(null);
   const [watermarkedUrl, setWatermarkedUrl] = useState<string>('');
   const [activeTab, setActiveTab] = useState('image');
+  const [videoProgress, setVideoProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -44,18 +46,23 @@ const Watermark = () => {
   };
 
   const processWatermark = async (type: 'image' | 'video' | 'audio') => {
-    if (!selectedFile || !watermarkKey) {
-      toast.error('Please select a file and enter a watermark key');
-      return;
-    }
-    
-    if (type === 'video') {
-      toast.info('Video watermarking is coming soon!');
+    if (!selectedFile) {
+      toast.error('Please select a file');
       return;
     }
     
     if (type === 'audio') {
       await processAudioWatermark();
+      return;
+    }
+    
+    if (type === 'video') {
+      await processVideoWatermark();
+      return;
+    }
+    
+    if (!watermarkKey) {
+      toast.error('Please enter a watermark key');
       return;
     }
     
@@ -122,8 +129,8 @@ const Watermark = () => {
       const arrayBuffer = await selectedFile.arrayBuffer();
       const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
       
-      // Generate key
-      const key: AudioWatermarkKey = AudioWatermarkProcessor.generateKey(watermarkKey);
+      // Auto-generate key from fixed seed for audio
+      const key: AudioWatermarkKey = AudioWatermarkProcessor.generateKey('audio-watermark-default-key');
       
       // Embed watermark using all 4 algorithms
       const watermarkedBuffer = await AudioWatermarkProcessor.embedWatermark(audioBuffer, key);
@@ -142,6 +149,42 @@ const Watermark = () => {
     }
   };
 
+  const processVideoWatermark = async () => {
+    if (!selectedFile) return;
+    
+    if (!watermarkKey) {
+      toast.error('Please enter a watermark key');
+      return;
+    }
+    
+    setIsProcessing(true);
+    setVideoProgress(0);
+    
+    try {
+      // Generate key
+      const key: WatermarkKey = WatermarkProcessor.generateKey(watermarkKey);
+      
+      // Embed watermark every 30 frames across 3 adjacent frames
+      const watermarkedBlob = await VideoWatermarkProcessor.embedWatermark(
+        selectedFile,
+        key,
+        (progress) => setVideoProgress(progress)
+      );
+      
+      const url = URL.createObjectURL(watermarkedBlob);
+      setWatermarkedUrl(url);
+      
+      toast.success('Video watermark embedded at every 30 frames across 3 adjacent frames!');
+      setIsProcessing(false);
+      setVideoProgress(0);
+    } catch (error) {
+      console.error('Video watermarking failed:', error);
+      toast.error('Video watermarking failed. Please try again.');
+      setIsProcessing(false);
+      setVideoProgress(0);
+    }
+  };
+
   const downloadWatermarkedImage = () => {
     if (!watermarkedUrl) return;
     
@@ -149,6 +192,8 @@ const Watermark = () => {
     link.href = watermarkedUrl;
     if (activeTab === 'audio') {
       link.download = `watermarked_${selectedFile?.name || 'audio.wav'}`;
+    } else if (activeTab === 'video') {
+      link.download = `watermarked_${selectedFile?.name || 'video.webm'}`;
     } else {
       link.download = `watermarked_${selectedFile?.name || 'image.png'}`;
     }
@@ -178,12 +223,12 @@ const Watermark = () => {
               )}
               {activeTab === 'video' && (
                 <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-                  Video watermarking coming soon - Advanced frame-by-frame watermark embedding
+                  Apply invisible watermarks using <strong>DCT+QIM+DWT+SVD</strong> at every 30 frames (1 second), repeated across 3 adjacent frames for robustness
                 </p>
               )}
               {activeTab === 'audio' && (
                 <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-                  Robust audio watermarking using <strong>LSB Substitution</strong>, <strong>Amplitude Modulation</strong>, <strong>Echo Hiding</strong>, and <strong>Spread Spectrum</strong> algorithms
+                  Robust audio watermarking using <strong>LSB Substitution</strong> (bit-level embedding), <strong>Amplitude Modulation</strong> (block-level modulation), <strong>Echo Hiding</strong> (time-delay encoding), and <strong>Spread Spectrum</strong> (frequency spreading) - no key required
                 </p>
               )}
             </div>
@@ -422,8 +467,21 @@ const Watermark = () => {
                       disabled={!selectedFile || !watermarkKey || isProcessing}
                       className="w-full btn-primary"
                     >
-                      {isProcessing ? 'Processing Video...' : 'Add Video Watermark'}
+                      {isProcessing 
+                        ? `Processing Video... ${videoProgress.toFixed(0)}%` 
+                        : 'Add Video Watermark'}
                     </Button>
+
+                    {watermarkedUrl && activeTab === 'video' && (
+                      <Button
+                        onClick={downloadWatermarkedImage}
+                        variant="outline"
+                        className="w-full btn-glass flex items-center space-x-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download Watermarked Video</span>
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -494,24 +552,6 @@ const Watermark = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="audio-watermark-key" className="flex items-center space-x-2">
-                        <Key className="w-4 h-4" />
-                        <span>Watermark Key</span>
-                      </Label>
-                      <Input
-                        id="audio-watermark-key"
-                        type="password"
-                        placeholder="Enter your secret key"
-                        value={watermarkKey}
-                        onChange={(e) => setWatermarkKey(e.target.value)}
-                        className="glass"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        This key generates watermarks for all 4 algorithms
-                      </p>
-                    </div>
-
                     <div className="space-y-3">
                       <div className="flex items-start space-x-2 p-3 bg-muted/10 rounded-lg">
                         <Lock className="w-4 h-4 text-primary mt-0.5" />
@@ -531,11 +571,16 @@ const Watermark = () => {
                           </p>
                         </div>
                       </div>
+                      <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                        <p className="text-sm text-muted-foreground">
+                          🔒 Audio watermarking uses automatic key generation - no manual key required
+                        </p>
+                      </div>
                     </div>
 
                     <Button
                       onClick={() => processWatermark('audio')}
-                      disabled={!selectedFile || !watermarkKey || isProcessing}
+                      disabled={!selectedFile || isProcessing}
                       className="w-full btn-primary"
                     >
                       {isProcessing ? 'Processing...' : 'Embed Audio Watermark'}
