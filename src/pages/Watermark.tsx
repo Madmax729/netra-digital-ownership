@@ -5,8 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SpaceGeometryBackground from '@/components/SpaceGeometryBackground';
-import { Upload, Shield, Image as ImageIcon, Video, Download, Key, Lock } from 'lucide-react';
+import { Upload, Shield, Image as ImageIcon, Video, Download, Key, Lock, Music } from 'lucide-react';
 import { WatermarkProcessor, type WatermarkKey } from '@/utils/watermarkAlgorithms';
+import { AudioWatermarkProcessor, type AudioWatermarkKey } from '@/utils/audioWatermarkAlgorithms';
+import { VideoWatermarkProcessor } from '@/utils/videoWatermarkAlgorithms';
 import { toast } from 'sonner';
 
 const Watermark = () => {
@@ -16,8 +18,11 @@ const Watermark = () => {
   const [watermarkKey, setWatermarkKey] = useState('');
   const [watermarkedImageData, setWatermarkedImageData] = useState<ImageData | null>(null);
   const [watermarkedUrl, setWatermarkedUrl] = useState<string>('');
+  const [activeTab, setActiveTab] = useState('image');
+  const [videoProgress, setVideoProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -25,6 +30,7 @@ const Watermark = () => {
       setSelectedFile(file);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+      setWatermarkedUrl(''); // Clear previous watermark
     }
   };
 
@@ -35,17 +41,28 @@ const Watermark = () => {
       setSelectedFile(file);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+      setWatermarkedUrl(''); // Clear previous watermark
     }
   };
 
-  const processWatermark = async (type: 'image' | 'video') => {
-    if (!selectedFile || !watermarkKey) {
-      toast.error('Please select a file and enter a watermark key');
+  const processWatermark = async (type: 'image' | 'video' | 'audio') => {
+    if (!selectedFile) {
+      toast.error('Please select a file');
+      return;
+    }
+    
+    if (type === 'audio') {
+      await processAudioWatermark();
       return;
     }
     
     if (type === 'video') {
-      toast.info('Video watermarking is coming soon!');
+      await processVideoWatermark();
+      return;
+    }
+    
+    if (!watermarkKey) {
+      toast.error('Please enter a watermark key');
       return;
     }
     
@@ -97,17 +114,94 @@ const Watermark = () => {
     }
   };
 
+  const processAudioWatermark = async () => {
+    if (!selectedFile) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      // Create audio context if not exists
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext();
+      }
+      
+      // Read audio file
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      
+      // Auto-generate key from fixed seed for audio
+      const key: AudioWatermarkKey = AudioWatermarkProcessor.generateKey('audio-watermark-default-key');
+      
+      // Embed watermark using all 4 algorithms
+      const watermarkedBuffer = await AudioWatermarkProcessor.embedWatermark(audioBuffer, key);
+      
+      // Convert to WAV blob
+      const wavBlob = await AudioWatermarkProcessor.audioBufferToWav(watermarkedBuffer);
+      const url = URL.createObjectURL(wavBlob);
+      setWatermarkedUrl(url);
+      
+      toast.success('Audio watermark embedded using LSB, AM, Echo Hiding, and Spread Spectrum!');
+      setIsProcessing(false);
+    } catch (error) {
+      console.error('Audio watermarking failed:', error);
+      toast.error('Audio watermarking failed. Please try again.');
+      setIsProcessing(false);
+    }
+  };
+
+  const processVideoWatermark = async () => {
+    if (!selectedFile) return;
+    
+    if (!watermarkKey) {
+      toast.error('Please enter a watermark key');
+      return;
+    }
+    
+    setIsProcessing(true);
+    setVideoProgress(0);
+    
+    try {
+      // Generate key
+      const key: WatermarkKey = WatermarkProcessor.generateKey(watermarkKey);
+      
+      // Embed watermark every 30 frames across 3 adjacent frames
+      const watermarkedBlob = await VideoWatermarkProcessor.embedWatermark(
+        selectedFile,
+        key,
+        (progress) => setVideoProgress(progress)
+      );
+      
+      const url = URL.createObjectURL(watermarkedBlob);
+      setWatermarkedUrl(url);
+      
+      toast.success('Video watermark embedded at every 30 frames across 3 adjacent frames!');
+      setIsProcessing(false);
+      setVideoProgress(0);
+    } catch (error) {
+      console.error('Video watermarking failed:', error);
+      toast.error('Video watermarking failed. Please try again.');
+      setIsProcessing(false);
+      setVideoProgress(0);
+    }
+  };
+
   const downloadWatermarkedImage = () => {
     if (!watermarkedUrl) return;
     
     const link = document.createElement('a');
     link.href = watermarkedUrl;
-    link.download = `watermarked_${selectedFile?.name || 'image.png'}`;
+    if (activeTab === 'audio') {
+      link.download = `watermarked_${selectedFile?.name || 'audio.wav'}`;
+    } else if (activeTab === 'video') {
+      link.download = `watermarked_${selectedFile?.name || 'video.webm'}`;
+    } else {
+      link.download = `watermarked_${selectedFile?.name || 'image.png'}`;
+    }
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    toast.success('Watermarked image downloaded!');
+    toast.success(`Watermarked ${activeTab} downloaded!`);
   };
 
   return (
@@ -121,20 +215,38 @@ const Watermark = () => {
             <h1 className="text-4xl font-bold text-foreground mb-4">
               Blind Watermarking
             </h1>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Embed invisible watermarks using DCT+QIM+DWT+SVD algorithms with key-based binary watermarks
-            </p>
+            <div className="animate-fade-in">
+              {activeTab === 'image' && (
+                <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+                  Embed invisible watermarks using <strong>DCT+QIM+DWT+SVD</strong> algorithms with key-based binary watermarks
+                </p>
+              )}
+              {activeTab === 'video' && (
+                <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+                  Apply invisible watermarks using <strong>DCT+QIM+DWT+SVD</strong> at every 30 frames (1 second), repeated across 3 adjacent frames for robustness
+                </p>
+              )}
+              {activeTab === 'audio' && (
+                <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+                  Robust audio watermarking using <strong>LSB Substitution</strong> (bit-level embedding), <strong>Amplitude Modulation</strong> (block-level modulation), <strong>Echo Hiding</strong> (time-delay encoding), and <strong>Spread Spectrum</strong> (frequency spreading) - no key required
+                </p>
+              )}
+            </div>
           </div>
 
-          <Tabs defaultValue="image" className="space-y-8">
-            <TabsList className="grid w-full grid-cols-2 glass">
+          <Tabs defaultValue="image" className="space-y-8" onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-3 glass">
               <TabsTrigger value="image" className="flex items-center space-x-2">
                 <ImageIcon className="w-4 h-4" />
-                <span>Image Watermarking</span>
+                <span>Image</span>
               </TabsTrigger>
               <TabsTrigger value="video" className="flex items-center space-x-2">
                 <Video className="w-4 h-4" />
-                <span>Video Watermarking</span>
+                <span>Video</span>
+              </TabsTrigger>
+              <TabsTrigger value="audio" className="flex items-center space-x-2">
+                <Music className="w-4 h-4" />
+                <span>Audio</span>
               </TabsTrigger>
             </TabsList>
 
@@ -355,8 +467,135 @@ const Watermark = () => {
                       disabled={!selectedFile || !watermarkKey || isProcessing}
                       className="w-full btn-primary"
                     >
-                      {isProcessing ? 'Processing Video...' : 'Add Video Watermark'}
+                      {isProcessing 
+                        ? `Processing Video... ${videoProgress.toFixed(0)}%` 
+                        : 'Add Video Watermark'}
                     </Button>
+
+                    {watermarkedUrl && activeTab === 'video' && (
+                      <Button
+                        onClick={downloadWatermarkedImage}
+                        variant="outline"
+                        className="w-full btn-glass flex items-center space-x-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download Watermarked Video</span>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="audio" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Upload Area */}
+                <Card className="glass-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Upload className="w-5 h-5" />
+                      <span>Upload Audio</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div
+                      className="border-2 border-dashed border-glass-border rounded-xl p-8 text-center transition-colors hover:border-primary/50 cursor-pointer"
+                      onDrop={handleDrop}
+                      onDragOver={(e) => e.preventDefault()}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {previewUrl && selectedFile?.type.startsWith('audio') ? (
+                        <div className="space-y-4">
+                          <div className="mx-auto w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+                            <Music className="w-8 h-8 text-primary" />
+                          </div>
+                          <audio
+                            src={previewUrl}
+                            controls
+                            className="w-full mx-auto rounded-lg"
+                          />
+                          <p className="text-sm text-muted-foreground">
+                            {selectedFile?.name}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Music className="w-6 h-6 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-foreground font-medium">
+                              Drop audio file here or click to browse
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              WAV, MP3, OGG up to 50MB
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <Input
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleFileSelect}
+                      className="glass"
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Audio Watermark Settings */}
+                <Card className="glass-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Shield className="w-5 h-5" />
+                      <span>Audio Watermark Settings</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <div className="flex items-start space-x-2 p-3 bg-muted/10 rounded-lg">
+                        <Lock className="w-4 h-4 text-primary mt-0.5" />
+                        <div className="text-sm space-y-1">
+                          <p className="font-medium">Multi-Algorithm Protection</p>
+                          <p className="text-muted-foreground text-xs">
+                            <strong>LSB:</strong> Embeds bits in least significant positions
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            <strong>AM:</strong> Modulates amplitude in frequency blocks
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            <strong>Echo:</strong> Adds imperceptible delayed echoes
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            <strong>Spread Spectrum:</strong> Spreads watermark across frequency
+                          </p>
+                        </div>
+                      </div>
+                      <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                        <p className="text-sm text-muted-foreground">
+                          🔒 Audio watermarking uses automatic key generation - no manual key required
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={() => processWatermark('audio')}
+                      disabled={!selectedFile || isProcessing}
+                      className="w-full btn-primary"
+                    >
+                      {isProcessing ? 'Processing...' : 'Embed Audio Watermark'}
+                    </Button>
+
+                    {watermarkedUrl && activeTab === 'audio' && (
+                      <Button
+                        onClick={downloadWatermarkedImage}
+                        variant="outline"
+                        className="w-full btn-glass flex items-center space-x-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download Watermarked Audio</span>
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               </div>
