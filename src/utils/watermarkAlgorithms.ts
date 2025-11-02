@@ -72,57 +72,64 @@ export class WatermarkProcessor {
   }
 
   private static quantizationBasedModulation(dctCoeffs: number[][], watermark: number[], alpha: number): number[][] {
-    // QIM (Quantization Index Modulation) implementation
+    // QIM (Quantization Index Modulation) implementation across available mid-frequency coefficients
     const result = dctCoeffs.map(row => [...row]);
     let watermarkIndex = 0;
-    
-    // Embed watermark in mid-frequency coefficients
-    for (let i = 1; i < Math.min(8, result.length); i++) {
-      for (let j = 1; j < Math.min(8, result[0].length); j++) {
-        if (watermarkIndex < watermark.length) {
-          const quantizer = alpha;
-          const bit = watermark[watermarkIndex];
-          const coefficient = result[i][j];
-          
-          // QIM embedding
-          const quantizedValue = Math.round(coefficient / quantizer) * quantizer;
-          if (bit === 1) {
-            result[i][j] = quantizedValue + quantizer / 4;
-          } else {
-            result[i][j] = quantizedValue - quantizer / 4;
-          }
-          
-          watermarkIndex++;
+
+    const rows = result.length;
+    const cols = result[0].length;
+
+    for (let i = 0; i < rows && watermarkIndex < watermark.length; i++) {
+      for (let j = 0; j < cols && watermarkIndex < watermark.length; j++) {
+        // Skip the DC component
+        if (i === 0 && j === 0) continue;
+
+        const quantizer = alpha;
+        const bit = watermark[watermarkIndex];
+        const coefficient = result[i][j];
+
+        // QIM embedding
+        const quantizedValue = Math.round(coefficient / quantizer) * quantizer;
+        if (bit === 1) {
+          result[i][j] = quantizedValue + quantizer / 4;
+        } else {
+          result[i][j] = quantizedValue - quantizer / 4;
         }
+
+        watermarkIndex++;
       }
     }
-    
+
     return result;
   }
 
   private static extractWatermarkQIM(dctCoeffs: number[][], watermarkLength: number, alpha: number): number[] {
     const extractedWatermark: number[] = [];
     let watermarkIndex = 0;
-    
-    for (let i = 1; i < Math.min(8, dctCoeffs.length); i++) {
-      for (let j = 1; j < Math.min(8, dctCoeffs[0].length); j++) {
-        if (watermarkIndex < watermarkLength) {
-          const quantizer = alpha;
-          const coefficient = dctCoeffs[i][j];
 
-          // QIM extraction (robust against negative remainders)
-          const mod = ((coefficient % quantizer) + quantizer) % quantizer;
-          // We embedded around q/4 (bit=1) and 3q/4 (bit=0). Pick the closest.
-          const distToOne = Math.abs(mod - quantizer / 4);
-          const distToZero = Math.abs(mod - (3 * quantizer) / 4);
-          const bit = distToOne <= distToZero ? 1 : 0;
-          extractedWatermark.push(bit);
+    const rows = dctCoeffs.length;
+    const cols = dctCoeffs[0].length;
 
-          watermarkIndex++;
-        }
+    for (let i = 0; i < rows && watermarkIndex < watermarkLength; i++) {
+      for (let j = 0; j < cols && watermarkIndex < watermarkLength; j++) {
+        // Skip the DC component
+        if (i === 0 && j === 0) continue;
+
+        const quantizer = alpha;
+        const coefficient = dctCoeffs[i][j];
+
+        // QIM extraction (robust against negative remainders)
+        const mod = ((coefficient % quantizer) + quantizer) % quantizer;
+        // We embedded around q/4 (bit=1) and 3q/4 (bit=0). Pick the closest.
+        const distToOne = Math.abs(mod - quantizer / 4);
+        const distToZero = Math.abs(mod - (3 * quantizer) / 4);
+        const bit = distToOne <= distToZero ? 1 : 0;
+        extractedWatermark.push(bit);
+
+        watermarkIndex++;
       }
     }
-    
+
     return extractedWatermark;
   }
 
